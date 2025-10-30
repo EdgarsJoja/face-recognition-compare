@@ -1,0 +1,10 @@
+# creates virtual environment
+python -m venv .venv
+
+# enter virtual environment
+source .venv/bin/activate
+venv/Scripts/activate.bat
+
+# Unlock/lock windows script exection (unlock to enter virtual environment)
+Set-ExecutionPolicy Unrestricted -Scope Process
+Set-ExecutionPolicy Default -Scope Proces

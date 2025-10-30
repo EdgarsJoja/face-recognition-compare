@@ -1,0 +1,5 @@
+cmake==3.25.2
+dlib==19.22.1
+opencv-python
+mediapipe-0.10.21-cp310-cp310-manylinux_2_28_x86_64.whl
+numpy==1.26.4
