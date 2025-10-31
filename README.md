@@ -1,7 +1,7 @@
 
 Build image:
 ```bash
-docker build -t face-compare:v1 .
+docker build -t <image-name>:<tag> .
 ```
 
 Run container. It will try to execute `main.py` script by default.
