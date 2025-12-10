@@ -79,8 +79,10 @@ class SimpleHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = HTTPServer(("0.0.0.0", 80), SimpleHandler)
-    print("Server running on http://0.0.0.0:80")
+    port = 80
+
+    server = HTTPServer(("0.0.0.0", port), SimpleHandler)
+    print("Server running on http://0.0.0.0:" + str(port))
     print("Endpoints:")
     print("  GET  /          - Serve HTML page")
     print("  POST /process   - Process video frames")
