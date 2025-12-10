@@ -2,8 +2,7 @@ import cgi
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import BytesIO
 
-import cv2
-import numpy as np
+from image import decode_image, encode_image, process_image
 
 
 class SimpleHandler(BaseHTTPRequestHandler):
@@ -45,21 +44,15 @@ class SimpleHandler(BaseHTTPRequestHandler):
                 file_item = form["frame"]
                 img_bytes = file_item.file.read()
 
-                # Decode image
-                nparr = np.frombuffer(img_bytes, np.uint8)
-                img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                img = decode_image(img_bytes)
 
                 if img is None:
                     self.send_error(400, "Invalid image")
                     return
 
-                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                processed = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+                processed = process_image(img)
 
-                # Encode back to JPEG
-                _, buffer = cv2.imencode(
-                    ".jpg", processed, [cv2.IMWRITE_JPEG_QUALITY, 85]
-                )
+                buffer = encode_image(processed)
 
                 # Send response
                 self.send_response(200)
