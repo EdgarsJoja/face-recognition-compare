@@ -1,5 +1,235 @@
 <!doctype html>
-<body>
-    <div>Hello</div>
-    <button>Test</button>
-</body>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Video Stream Processing</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                max-width: 800px;
+                margin: 50px auto;
+                padding: 20px;
+            }
+            .container {
+                display: flex;
+                gap: 20px;
+                flex-wrap: wrap;
+            }
+            .video-container {
+                flex: 1;
+                min-width: 300px;
+            }
+            video,
+            img {
+                width: 100%;
+                max-width: 320px;
+                border: 2px solid #333;
+                border-radius: 8px;
+            }
+            canvas {
+                display: none;
+            }
+            button {
+                padding: 10px 20px;
+                margin: 10px 5px;
+                font-size: 16px;
+                cursor: pointer;
+                border: none;
+                border-radius: 5px;
+                background-color: #007bff;
+                color: white;
+            }
+            button:disabled {
+                background-color: #ccc;
+                cursor: not-allowed;
+            }
+            button.stop {
+                background-color: #dc3545;
+            }
+            h2 {
+                margin-top: 0;
+            }
+            .stats {
+                margin-top: 10px;
+                font-size: 14px;
+                color: #666;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Real-time Video Processing</h1>
+
+        <div>
+            <button id="start-button">Start Camera</button>
+            <button id="stop-button" class="stop" disabled>Stop Camera</button>
+        </div>
+
+        <div class="stats">
+            <span id="fps">FPS: 0</span> |
+            <span id="status">Status: Ready</span>
+        </div>
+
+        <div class="container">
+            <div class="video-container">
+                <h2>Original Stream</h2>
+                <video id="video" autoplay playsinline>
+                    Video stream not available.
+                </video>
+            </div>
+
+            <div class="video-container">
+                <h2>Processed Stream</h2>
+                <img
+                    id="photo"
+                    src=""
+                    alt="Processed frames will appear here."
+                />
+            </div>
+        </div>
+
+        <canvas id="canvas"></canvas>
+
+        <script>
+            const width = 320;
+            let height = 0;
+            let streaming = false;
+            let stream = null;
+            let intervalId = null;
+            let frameCount = 0;
+            let lastTime = Date.now();
+
+            const video = document.getElementById("video");
+            const canvas = document.getElementById("canvas");
+            const photo = document.getElementById("photo");
+            const startButton = document.getElementById("start-button");
+            const stopButton = document.getElementById("stop-button");
+            const fpsDisplay = document.getElementById("fps");
+            const statusDisplay = document.getElementById("status");
+
+            video.addEventListener("canplay", () => {
+                if (!streaming) {
+                    height = video.videoHeight / (video.videoWidth / width);
+
+                    if (isNaN(height)) {
+                        height = width / (4 / 3);
+                    }
+
+                    video.setAttribute("width", width);
+                    video.setAttribute("height", height);
+                    canvas.setAttribute("width", width);
+                    canvas.setAttribute("height", height);
+                    streaming = true;
+                }
+            });
+
+            startButton.addEventListener("click", async () => {
+                try {
+                    statusDisplay.textContent =
+                        "Status: Requesting camera access...";
+
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { width: 640, height: 480 },
+                        audio: false,
+                    });
+
+                    video.srcObject = stream;
+                    startButton.disabled = true;
+                    stopButton.disabled = false;
+                    statusDisplay.textContent = "Status: Running";
+
+                    // Start sending frames to server every 100ms (10 FPS)
+                    intervalId = setInterval(captureAndSend, 100);
+
+                    // Update FPS counter
+                    setInterval(updateFPS, 1000);
+                } catch (err) {
+                    console.error(`An error occurred: ${err}`);
+                    alert("Could not access camera: " + err.message);
+                    statusDisplay.textContent =
+                        "Status: Error - " + err.message;
+                }
+            });
+
+            stopButton.addEventListener("click", () => {
+                if (stream) {
+                    stream.getTracks().forEach((track) => track.stop());
+                    video.srcObject = null;
+                }
+
+                if (intervalId) {
+                    clearInterval(intervalId);
+                    intervalId = null;
+                }
+
+                streaming = false;
+                startButton.disabled = false;
+                stopButton.disabled = true;
+                photo.src = "";
+                statusDisplay.textContent = "Status: Stopped";
+                fpsDisplay.textContent = "FPS: 0";
+            });
+
+            async function captureAndSend() {
+                if (!streaming) return;
+
+                const context = canvas.getContext("2d");
+                if (width && height) {
+                    canvas.width = width;
+                    canvas.height = height;
+                    context.drawImage(video, 0, 0, width, height);
+
+                    // Convert canvas to blob
+                    canvas.toBlob(
+                        async (blob) => {
+                            try {
+                                const formData = new FormData();
+                                formData.append("frame", blob, "frame.jpg");
+
+                                const response = await fetch("/process", {
+                                    method: "POST",
+                                    body: formData,
+                                });
+
+                                if (response.ok) {
+                                    const processedBlob = await response.blob();
+                                    const url =
+                                        URL.createObjectURL(processedBlob);
+
+                                    // Revoke old URL to prevent memory leaks
+                                    if (photo.src) {
+                                        URL.revokeObjectURL(photo.src);
+                                    }
+
+                                    photo.src = url;
+                                    frameCount++;
+                                } else {
+                                    console.error(
+                                        "Server error:",
+                                        response.status,
+                                    );
+                                    statusDisplay.textContent = `Status: Error ${response.status}`;
+                                }
+                            } catch (error) {
+                                console.error("Error sending frame:", error);
+                                statusDisplay.textContent =
+                                    "Status: Connection error";
+                            }
+                        },
+                        "image/jpeg",
+                        0.85,
+                    );
+                }
+            }
+
+            function updateFPS() {
+                const now = Date.now();
+                const elapsed = (now - lastTime) / 1000;
+                const fps = (frameCount / elapsed).toFixed(1);
+                fpsDisplay.textContent = `FPS: ${fps}`;
+                frameCount = 0;
+                lastTime = now;
+            }
+        </script>
+    </body>
+</html>
